@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DEADEYE PIXEL by Erblin - Arcade Shooter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: 'Press Start 2P', monospace;
+            background-color: #030308;
+            color: #ffffff;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* CRT Scanline Overlay Effect */
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.03));
+            z-index: 40;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        /* Screen Shake Effect */
+        @keyframes shake {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-8px, 6px); }
+            40% { transform: translate(8px, -6px); }
+            60% { transform: translate(-6px, -4px); }
+            80% { transform: translate(6px, 4px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        .shake {
+            animation: shake 0.22s ease-in-out;
+        }
+
+        /* Arcade Pulsing Text */
+        .arcade-pulse {
+            animation: pulseText 1.2s infinite alternate;
+        }
+
+        @keyframes pulseText {
+            0% { opacity: 0.4; transform: scale(0.98); }
+            100% { opacity: 1; transform: scale(1.02); }
+        }
+
+        /* Overdrive Hyper Glow Border */
+        .overdrive-glow {
+            box-shadow: 0 0 30px #f43f5e, inset 0 0 20px #f43f5e !important;
+            border-color: #f43f5e !important;
+        }
+
+        /* Banner Slide Animation */
+        @keyframes bannerSlide {
+            0% { transform: translateY(-100%); opacity: 0; }
+            15% { transform: translateY(0); opacity: 1; }
+            85% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-100%); opacity: 0; }
+        }
+
+        .phase-banner-anim {
+            animation: bannerSlide 2.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Pixel Button Styles */
+        .pixel-btn {
+            box-shadow: 0px 5px 0px #000, inset 0px -3px 0px rgba(0,0,0,0.4);
+            transition: all 0.05s ease;
+        }
+        .pixel-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0px 2px 0px #000, inset 0px -1px 0px rgba(0,0,0,0.4);
+        }
+
+        .pixel-card {
+            box-shadow: 0px 6px 0px #000;
+        }
+
+        /* Custom Scrollbar for Settings Modal */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #020617;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+    </style>
+</head>
+<body class="crt flex items-center justify-center min-h-screen select-none">
+
+    <!-- Main Outer Arcade Cabinet Container -->
+    <div id="game-container" class="relative w-full h-full max-w-4xl max-h-[880px] bg-slate-950 flex flex-col items-center justify-between overflow-hidden border-0 md:border-4 border-fuchsia-600 shadow-[0_0_50px_rgba(192,38,211,0.25)] md:rounded-2xl transition-all duration-300">
+
+        <!-- Top Header HUD -->
+        <div id="hud" class="w-full p-2.5 md:p-4 flex justify-between items-center z-20 bg-slate-900/90 border-b-4 border-slate-800 backdrop-blur-sm">
+            <div class="flex flex-col">
+                <span class="text-[9px] md:text-[11px] text-fuchsia-400 mb-0.5">SCORE</span>
+                <span id="score-display" class="text-base md:text-2xl text-yellow-300 drop-shadow-[0_2px_0_#000]">0</span>
+            </div>
+
+            <!-- Current Mode / Stage Badge -->
+            <div class="flex flex-col items-center">
+                <span id="hud-mode-label" class="text-[8px] md:text-[10px] text-cyan-400 mb-0.5">PROGRESSION</span>
+                <span id="phase-badge" class="text-[9px] md:text-xs px-2 py-0.5 bg-cyan-950 border-2 border-cyan-400 text-cyan-300 rounded">STAGE 1</span>
+            </div>
+
+            <!-- Audio Mute & High Score Controls -->
+            <div class="flex items-center space-x-2 md:space-x-3">
+                <button id="quick-mute-btn" class="pixel-btn bg-slate-800 hover:bg-slate-700 text-yellow-400 border border-slate-600 p-1.5 md:p-2 rounded text-xs" title="Toggle Sound">
+                    🔊
+                </button>
+                <div class="flex flex-col items-end">
+                    <span class="text-[9px] md:text-[11px] text-rose-400 mb-0.5">HIGH SCORE</span>
+                    <span id="high-score-hud" class="text-base md:text-2xl text-rose-300 drop-shadow-[0_2px_0_#000]">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stage Up Banner Notification -->
+        <div id="phase-banner" class="absolute top-20 z-30 pointer-events-none hidden phase-banner-anim w-full flex justify-center">
+            <div id="phase-banner-content" class="bg-gradient-to-r from-fuchsia-600 via-indigo-600 to-cyan-600 border-y-4 border-white text-white px-6 py-2.5 text-center text-xs md:text-sm shadow-2xl tracking-wider">
+                STAGE 2: TRAPS & DYNAMIC DRIFT UNLOCKED!
+            </div>
+        </div>
+
+        <!-- Main Game Canvas -->
+        <canvas id="gameCanvas" class="w-full h-full cursor-crosshair relative z-10"></canvas>
+
+        <!-- HOME MENU OVERLAY -->
+        <div id="home-screen" class="absolute inset-0 z-30 flex flex-col items-center justify-between bg-slate-950/95 p-6 text-center overflow-y-auto">
+            
+            <!-- Game Title -->
+            <div class="mt-2 md:mt-4">
+                <h1 class="text-3xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-fuchsia-500 to-cyan-400 font-extrabold tracking-widest drop-shadow-[0_4px_0_#000] leading-tight">
+                    DEADEYE<br><span class="text-2xl md:text-4xl text-fuchsia-400">PIXEL</span>
+                </h1>
+                <p class="text-[10px] md:text-xs text-yellow-400 tracking-widest mt-2">BY ERBLIN</p>
+                <p class="text-[9px] md:text-[10px] text-slate-400 tracking-widest mt-1">RETRO ONE-TAP SHOOTER</p>
+            </div>
+
+            <!-- Mode Selection Cards -->
+            <div class="w-full max-w-md my-4 space-y-3">
+                <p class="text-[11px] md:text-xs text-yellow-400 font-bold tracking-wider">SELECT GAME MODE</p>
+                
+                <div id="mode-progression-card" class="pixel-card bg-slate-900 border-2 border-cyan-400 rounded-lg p-3 cursor-pointer text-left transition hover:border-white">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <span class="text-xs md:text-sm font-bold text-cyan-300">PROGRESSION MODE</span>
+                        <span id="best-progression-tag" class="text-[9px] md:text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-700 px-2 py-0.5 rounded">BEST: 0</span>
+                    </div>
+                    <p class="text-[9px] md:text-[10px] text-slate-400 leading-relaxed">Slower, wider stage gaps! Smooth difficulty ramping across Stage 1 (0-25), Stage 2 (26-60), Stage 3 (61-110), and Stage 4 (111+).</p>
+                </div>
+
+                <div id="mode-stationary-card" class="pixel-card bg-slate-900/60 border-2 border-slate-700 rounded-lg p-3 cursor-pointer text-left transition hover:border-white">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <span class="text-xs md:text-sm font-bold text-slate-300">STATIONARY MODE</span>
+                        <span id="best-stationary-tag" class="text-[9px] md:text-[10px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded">BEST: 0</span>
+                    </div>
+                    <p class="text-[9px] md:text-[10px] text-slate-400 leading-relaxed">Relaxed arcade consistency. Fixed gentle target movement, fixed lifespan, zero traps.</p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="mb-4 w-full max-w-xs space-y-3">
+                <button id="start-btn" class="pixel-btn w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs md:text-sm px-6 py-4 border-2 border-white rounded-md cursor-pointer arcade-pulse tracking-wider">
+                    TAP TO START GAME
+                </button>
+
+                <button id="open-settings-btn" class="pixel-btn w-full bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs px-6 py-3 border-2 border-slate-600 rounded-md cursor-pointer tracking-wider flex items-center justify-center space-x-2">
+                    <span>⚙️</span>
+                    <span>SETTINGS & GUIDE</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- SETTINGS & TARGET GUIDE MODAL -->
+        <div id="settings-modal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 hidden">
+            <div class="bg-slate-900 border-4 border-fuchsia-500 rounded-xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+                
+                <!-- Modal Header -->
+                <div class="flex justify-between items-center p-4 bg-slate-950 border-b-2 border-slate-800">
+                    <h2 class="text-xs md:text-sm text-fuchsia-400 font-bold tracking-widest flex items-center space-x-2">
+                        <span>⚙️</span>
+                        <span>SETTINGS & GUIDE</span>
+                    </h2>
+                    <button id="close-settings-btn" class="pixel-btn bg-rose-600 hover:bg-rose-500 text-white px-3 py-1 rounded text-xs font-bold">
+                        ✕
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="p-4 overflow-y-auto space-y-5 text-left">
+                    
+                    <!-- 1. Sound FX Toggle -->
+                    <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center">
+                        <div>
+                            <span class="text-xs text-yellow-300 font-bold block mb-1">AUDIO & SOUND FX</span>
+                            <span class="text-[9px] text-slate-400 block">Synthesized retro arcade audio</span>
+                        </div>
+                        <button id="modal-mute-btn" class="pixel-btn px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold border border-white">
+                            SOUND: ON 🔊
+                        </button>
+                    </div>
+
+                    <!-- 2. Visual Theme Selector -->
+                    <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                        <span class="text-xs text-yellow-300 font-bold block mb-2">ENVIRONMENT THEME</span>
+                        <div class="flex items-center justify-between bg-slate-900 border-2 border-slate-700 rounded-lg p-2">
+                            <button id="prev-theme-btn" class="pixel-btn bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded text-xs">◄</button>
+                            <div class="flex flex-col items-center text-center">
+                                <span id="theme-name" class="text-xs md:text-sm text-fuchsia-300 font-bold">CYBER NEON</span>
+                                <span id="theme-desc" class="text-[8px] md:text-[9px] text-slate-400 mt-1">Glowing Cyber Grid & Dynamic Lighting</span>
+                            </div>
+                            <button id="next-theme-btn" class="pixel-btn bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded text-xs">►</button>
+                        </div>
+                    </div>
+
+                    <!-- 3. Target Field Guide -->
+                    <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                        <span class="text-xs text-yellow-300 font-bold block mb-2">TARGET FIELD GUIDE</span>
+                        
+                        <div class="space-y-2 text-[9px] md:text-[10px]">
+                            <div class="flex items-center space-x-2 bg-slate-900 p-2 rounded border border-slate-800">
+                                <span class="w-4 h-4 rounded-full bg-cyan-400 inline-block border border-white flex-shrink-0"></span>
+                                <div>
+                                    <span class="text-cyan-300 font-bold block">Standard Target</span>
+                                    <span class="text-slate-400 text-[8px]">Basic 1-tap target (+1 Point).</span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2 bg-slate-900 p-2 rounded border border-yellow-800">
+                                <span class="w-4 h-4 rounded-full bg-yellow-400 inline-block border border-white animate-pulse flex-shrink-0"></span>
+                                <div>
+                                    <span class="text-yellow-300 font-bold block">Gold Star (+3 Points)</span>
+                                    <span class="text-slate-400 text-[8px]">Bonus points! Disappears 25% faster.</span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2 bg-slate-900 p-2 rounded border border-slate-700">
+                                <span class="w-4 h-4 bg-slate-400 inline-block border border-slate-200 flex-shrink-0 text-[8px] text-center text-black font-bold leading-4">2</span>
+                                <div>
+                                    <span class="text-slate-200 font-bold block">Armored Target (2 Taps)</span>
+                                    <span class="text-slate-400 text-[8px]">Requires 2 quick taps to break (+2 Points).</span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2 bg-slate-900 p-2 rounded border border-emerald-800">
+                                <span class="w-4 h-4 rounded-full bg-emerald-400 inline-block border border-white flex-shrink-0"></span>
+                                <div>
+                                    <span class="text-emerald-300 font-bold block">Mini Speedster</span>
+                                    <span class="text-slate-400 text-[8px]">Fast-moving, smaller hit target (+2 Points).</span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2 bg-rose-950/60 p-2 rounded border border-rose-800">
+                                <span class="w-4 h-4 rounded-full bg-rose-500 inline-block border border-white flex-shrink-0"></span>
+                                <div>
+                                    <span class="text-rose-300 font-bold block">Skull / Trap Target</span>
+                                    <span class="text-rose-400 text-[8px]">⚠️ DO NOT TAP! Tapping causes instant Game Over.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="p-3 bg-slate-950 border-t-2 border-slate-800 text-center">
+                    <button id="close-settings-bottom-btn" class="pixel-btn w-full bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs py-2.5 rounded border border-slate-600">
+                        BACK TO MENU
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- GAME OVER OVERLAY -->
+        <div id="game-over-screen" class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/95 p-6 text-center hidden">
+            <h2 class="text-2xl md:text-4xl text-rose-500 font-extrabold tracking-widest drop-shadow-[0_4px_0_#000] mb-2 animate-bounce">
+                GAME OVER
+            </h2>
+            <p id="death-reason" class="text-[10px] md:text-xs text-rose-300 mb-6 bg-rose-950/60 px-4 py-2 border border-rose-800 rounded">
+                Target Timed Out!
+            </p>
+
+            <!-- Final Stats Box -->
+            <div class="bg-slate-900 border-2 border-slate-800 rounded-lg p-4 max-w-xs w-full mb-6 space-y-3 text-[10px] md:text-xs">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-slate-400">FINAL SCORE</span>
+                    <span id="final-score" class="text-yellow-300 text-sm md:text-base">0</span>
+                </div>
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-slate-400">BEST SCORE</span>
+                    <span id="final-high-score" class="text-rose-400 text-sm md:text-base">0</span>
+                </div>
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-slate-400">MODE</span>
+                    <span id="final-mode-label" class="text-cyan-400">PROGRESSION</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">BEST COMBO</span>
+                    <span id="final-combo" class="text-fuchsia-400">0x</span>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
+                <button id="retry-btn" class="pixel-btn flex-1 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white font-bold text-xs px-4 py-3 border-2 border-white rounded-md cursor-pointer tracking-wider">
+                    PLAY AGAIN
+                </button>
+                <button id="home-btn" class="pixel-btn flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-4 py-3 border-2 border-slate-500 rounded-md cursor-pointer tracking-wider">
+                    HOME MENU
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // WEB AUDIO API SYNTHESIZER
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.isMuted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                return this.isMuted;
+            }
+
+            playClick() {
+                if (this.isMuted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const now = this.ctx.currentTime;
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(200, now + 0.04);
+
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.04);
+            }
+
+            playHit(type = 'standard', isPerfect = false) {
+                if (this.isMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                if (type === 'gold') {
+                    const osc1 = this.ctx.createOscillator();
+                    const osc2 = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc1.type = 'sine';
+                    osc2.type = 'triangle';
+
+                    osc1.frequency.setValueAtTime(987.77, now);
+                    osc1.frequency.setValueAtTime(1318.51, now + 0.06);
+
+                    osc2.frequency.setValueAtTime(1318.51, now); 
+                    osc2.frequency.setValueAtTime(1758.20, now + 0.06); 
+
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+
+                    osc1.connect(gain);
+                    osc2.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc1.start(now);
+                    osc2.start(now);
+                    osc1.stop(now + 0.18);
+                    osc2.stop(now + 0.18);
+                    return;
+                }
+
+                if (type === 'armored_hit') {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(1200, now);
+                    osc.frequency.exponentialRampToValueAtTime(400, now + 0.05);
+
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                    return;
+                }
+
+                if (type === 'speedster') {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(1600, now);
+                    osc.frequency.exponentialRampToValueAtTime(300, now + 0.07);
+
+                    gain.gain.setValueAtTime(0.22, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.07);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 0.07);
+                    return;
+                }
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.type = 'sawtooth';
+                const startFreq = isPerfect ? 1300 : 850;
+                const endFreq = isPerfect ? 350 : 220;
+
+                osc.frequency.setValueAtTime(startFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.08);
+
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.08);
+            }
+
+            playExplosion() {
+                if (this.isMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.35);
+
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.35);
+            }
+
+            playPhaseUp() {
+                if (this.isMuted || !this.ctx) return;
+                const notes = [440, 554.37, 659.25, 880];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    const now = this.ctx.currentTime + (idx * 0.05);
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 0.09);
+                });
+            }
+        }
+
+        const soundFX = new SoundFX();
+
+        // Canvas Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+
+        // UI DOM Elements
+        const scoreDisplay = document.getElementById('score-display');
+        const highScoreHud = document.getElementById('high-score-hud');
+        const hudModeLabel = document.getElementById('hud-mode-label');
+        const phaseBadge = document.getElementById('phase-badge');
+        const phaseBanner = document.getElementById('phase-banner');
+        const phaseBannerContent = document.getElementById('phase-banner-content');
+        
+        const homeScreen = document.getElementById('home-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const startBtn = document.getElementById('start-btn');
+        const retryBtn = document.getElementById('retry-btn');
+        const homeBtn = document.getElementById('home-btn');
+
+        const modeProgCard = document.getElementById('mode-progression-card');
+        const modeStatCard = document.getElementById('mode-stationary-card');
+        const bestProgTag = document.getElementById('best-progression-tag');
+        const bestStatTag = document.getElementById('best-stationary-tag');
+
+        // Modal Elements
+        const settingsModal = document.getElementById('settings-modal');
+        const openSettingsBtn = document.getElementById('open-settings-btn');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+        const closeSettingsBottomBtn = document.getElementById('close-settings-bottom-btn');
+        const quickMuteBtn = document.getElementById('quick-mute-btn');
+        const modalMuteBtn = document.getElementById('modal-mute-btn');
+
+        const themeNameEl = document.getElementById('theme-name');
+        const themeDescEl = document.getElementById('theme-desc');
+        const prevThemeBtn = document.getElementById('prev-theme-btn');
+        const nextThemeBtn = document.getElementById('next-theme-btn');
+
+        const deathReasonText = document.getElementById('death-reason');
+        const finalScoreText = document.getElementById('final-score');
+        const finalHighScoreText = document.getElementById('final-high-score');
+        const finalModeLabel = document.getElementById('final-mode-label');
+        const finalComboText = document.getElementById('final-combo');
+
+        // Environment Themes
+        const THEMES = [
+            {
+                id: 'cyber',
+                name: 'CYBER NEON',
+                desc: 'Glowing Cyber Grid & Dynamic Lighting',
+                bgColor: '#080812',
+                gridColor: '#1e1b4b',
+                targetOuter: '#06b6d4',
+                targetMid: '#facc15',
+                targetInner: '#e11d48',
+                trapBg: '#f43f5e',
+                goldColor: '#facc15',
+                armoredColor: '#64748b',
+                speedsterColor: '#10b981'
+            },
+            {
+                id: 'saloon',
+                name: 'WILD WEST SALOON',
+                desc: 'Dusty Wooden Tavern & Outlaw Grid',
+                bgColor: '#1c130d',
+                gridColor: '#2d1e13',
+                targetOuter: '#d97706',
+                targetMid: '#f59e0b',
+                targetInner: '#78350f',
+                trapBg: '#9f1239',
+                goldColor: '#fbbf24',
+                armoredColor: '#71717a',
+                speedsterColor: '#059669'
+            },
+            {
+                id: 'space',
+                name: 'SPACE DEFENDER',
+                desc: 'Twinkling Starfield & Cosmic Lighting',
+                bgColor: '#030712',
+                gridColor: '#111827',
+                targetOuter: '#8b5cf6',
+                targetMid: '#22c55e',
+                targetInner: '#ec4899',
+                trapBg: '#dc2626',
+                goldColor: '#f59e0b',
+                armoredColor: '#475569',
+                speedsterColor: '#06b6d4'
+            }
+        ];
+
+        let currentThemeIdx = 0;
+        let selectedMode = 'PROGRESSION';
+
+        // Game State Variables
+        let gameState = 'HOME';
+        let score = 0;
+        let highScores = {
+            PROGRESSION: parseInt(localStorage.getItem('deadeye_high_progression') || '0', 10),
+            STATIONARY: parseInt(localStorage.getItem('deadeye_high_stationary') || '0', 10)
+        };
+
+        let currentPhase = 1;
+        let comboCount = 0;
+        let maxCombo = 0;
+
+        let targets = [];
+        let particles = [];
+        let floatingTexts = [];
+        let stars = [];
+
+        let lastSpawnTime = 0;
+        let animFrameId = null;
+
+        // EXPANDED STAGE MILESTONES & CONFIGURATIONS
+        const PHASE_CONFIGS = {
+            1: { name: "STAGE 1: WARM-UP (SCORE 0-25)", minScore: 0, maxScore: 25, badgeBg: "bg-cyan-950", badgeBorder: "border-cyan-400", badgeText: "text-cyan-300", allowTraps: false, goldProb: 0.12, armoredProb: 0.10, speedsterProb: 0.10, trapProb: 0 },
+            2: { name: "STAGE 2: PACING UP (SCORE 26-60)", minScore: 26, maxScore: 60, badgeBg: "bg-amber-950", badgeBorder: "border-amber-400", badgeText: "text-amber-300", allowTraps: true, goldProb: 0.15, armoredProb: 0.15, speedsterProb: 0.15, trapProb: 0.18 },
+            3: { name: "STAGE 3: HIGH-SPEED CHAOS (61-110)", minScore: 61, maxScore: 110, badgeBg: "bg-fuchsia-950", badgeBorder: "border-fuchsia-400", badgeText: "text-fuchsia-300", allowTraps: true, goldProb: 0.18, armoredProb: 0.20, speedsterProb: 0.20, trapProb: 0.22, multiSpawnProb: 0.18 },
+            4: { name: "STAGE 4: OVERDRIVE! (SCORE 111+)", minScore: 111, maxScore: 250, badgeBg: "bg-rose-950", badgeBorder: "border-rose-500", badgeText: "text-rose-300", allowTraps: true, goldProb: 0.20, armoredProb: 0.22, speedsterProb: 0.22, trapProb: 0.28, multiSpawnProb: 0.32 }
+        };
+
+        const STATIONARY_CONFIG = {
+            name: "CLASSIC STATIONARY", badgeBg: "bg-slate-800", badgeBorder: "border-slate-500", badgeText: "text-slate-300", goldProb: 0.12, armoredProb: 0.14, speedsterProb: 0.14, trapProb: 0
+        };
+
+        // SMOOTH INTERPOLATION HELPER
+        function getDynamicParameters() {
+            if (selectedMode === 'STATIONARY') {
+                return {
+                    lifespan: 1400,
+                    spawnDelay: 950,
+                    minRadius: 28,
+                    maxRadius: 36,
+                    driftSpeedScale: 0.4
+                };
+            }
+
+            // Progression Smooth Interpolation (0 -> 150 Score)
+            const clampedScore = Math.min(150, Math.max(0, score));
+            const progress = clampedScore / 150.0;
+
+            const lifespan = 1600 - (progress * 1150);     // Smoothly ramps from 1600ms down to 450ms
+            const spawnDelay = 1100 - (progress * 720);    // Smoothly ramps from 1100ms down to 380ms
+            const minRadius = Math.round(30 - (progress * 14)); // 30px down to 16px
+            const maxRadius = Math.round(38 - (progress * 14)); // 38px down to 24px
+            const driftSpeedScale = 0.3 + (progress * 2.2);     // Gentle drift (0.3) -> Rapid drift (2.5)
+
+            return { lifespan, spawnDelay, minRadius, maxRadius, driftSpeedScale };
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            initStars();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < 50; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2 + 1,
+                    alpha: Math.random(),
+                    speed: Math.random() * 0.5 + 0.2
+                });
+            }
+        }
+
+        // TARGET CLASS WITH SMOOTH DRIFTING MOVEMENT
+        class Target {
+            constructor(x, y, radius, type, lifespan, moveSpeedScale) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.type = type;
+                this.isTrap = (type === 'trap');
+                this.lifespan = type === 'gold' ? lifespan * 0.75 : lifespan;
+                this.spawnTime = performance.now();
+                this.hp = type === 'armored' ? 2 : 1;
+                this.maxHp = this.hp;
+
+                // Smooth Drifting Movement Velocities
+                const angle = Math.random() * Math.PI * 2;
+                let speedMultiplier = moveSpeedScale;
+                if (type === 'speedster') speedMultiplier *= 2.2;
+                if (type === 'gold') speedMultiplier *= 1.4;
+
+                this.vx = Math.cos(angle) * speedMultiplier;
+                this.vy = Math.sin(angle) * speedMultiplier;
+            }
+
+            update(canvasWidth, canvasHeight) {
+                // Smooth position updates
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Bounce off border edges smoothly
+                const padding = this.radius + 10;
+                if (this.x < padding) {
+                    this.x = padding;
+                    this.vx *= -1;
+                } else if (this.x > canvasWidth - padding) {
+                    this.x = canvasWidth - padding;
+                    this.vx *= -1;
+                }
+
+                if (this.y < padding) {
+                    this.y = padding;
+                    this.vy *= -1;
+                } else if (this.y > canvasHeight - padding) {
+                    this.y = canvasHeight - padding;
+                    this.vy *= -1;
+                }
+            }
+
+            draw(ctx, currentTime) {
+                const elapsed = currentTime - this.spawnTime;
+                const remainingRatio = Math.max(0, 1 - (elapsed / this.lifespan));
+                const theme = THEMES[currentThemeIdx];
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                if (this.type === 'trap') {
+                    ctx.fillStyle = theme.trapBg;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#0f172a';
+                    ctx.beginPath();
+                    ctx.arc(0, -this.radius * 0.1, this.radius * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillRect(-this.radius * 0.25, this.radius * 0.2, this.radius * 0.5, this.radius * 0.3);
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-this.radius * 0.2, -this.radius * 0.2, this.radius * 0.12, this.radius * 0.12);
+                    ctx.fillRect(this.radius * 0.08, -this.radius * 0.2, this.radius * 0.12, this.radius * 0.12);
+
+                } else if (this.type === 'gold') {
+                    const pulse = Math.sin(currentTime * 0.015) * 3;
+                    const r = this.radius + pulse;
+
+                    ctx.fillStyle = '#fef08a';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = theme.goldColor;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, r, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#78350f';
+                    ctx.font = `${Math.floor(this.radius)}px "Press Start 2P"`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('★', 0, 2);
+
+                } else if (this.type === 'armored') {
+                    ctx.fillStyle = theme.armoredColor;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = this.hp === 2 ? '#334155' : '#e2e8f0';
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+
+                    ctx.fillStyle = this.hp === 2 ? '#94a3b8' : '#f87171';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#0f172a';
+                    ctx.font = `${Math.floor(this.radius * 0.6)}px "Press Start 2P"`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(this.hp === 2 ? '2' : '1', 0, 1);
+
+                } else if (this.type === 'speedster') {
+                    ctx.fillStyle = theme.speedsterColor;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = '#a7f3d0';
+                    ctx.lineWidth = 2.5;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#064e3b';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                } else {
+                    ctx.fillStyle = theme.targetOuter;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = theme.targetMid;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 0.65, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = theme.targetInner;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.strokeStyle = this.isTrap ? '#fda4af' : (this.type === 'gold' ? '#fef08a' : '#ffffff');
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius + 5, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * remainingRatio));
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            isPointInside(px, py) {
+                return Math.hypot(px - this.x, py - this.y) <= this.radius + 12;
+            }
+        }
+
+        // Particle Class
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = Math.random() * 4 + 2;
+                this.vx = (Math.random() - 0.5) * 12;
+                this.vy = (Math.random() - 0.5) * 12;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.04 + 0.02;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.radius, this.radius);
+                ctx.restore();
+            }
+        }
+
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.alpha = 1;
+                this.vy = -2.2;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.alpha -= 0.03;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.font = '11px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        function triggerScreenShake() {
+            gameContainer.classList.remove('shake');
+            void gameContainer.offsetWidth;
+            gameContainer.classList.add('shake');
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 18; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function updateUIHighScores() {
+            bestProgTag.textContent = `BEST: ${highScores.PROGRESSION}`;
+            bestStatTag.textContent = `BEST: ${highScores.STATIONARY}`;
+            highScoreHud.textContent = highScores[selectedMode];
+        }
+
+        function setGameMode(mode) {
+            selectedMode = mode;
+            soundFX.playClick();
+
+            if (mode === 'PROGRESSION') {
+                modeProgCard.className = "pixel-card bg-slate-900 border-2 border-cyan-400 rounded-lg p-3 cursor-pointer text-left transition hover:border-white";
+                modeStatCard.className = "pixel-card bg-slate-900/60 border-2 border-slate-700 rounded-lg p-3 cursor-pointer text-left transition hover:border-white";
+            } else {
+                modeStatCard.className = "pixel-card bg-slate-900 border-2 border-cyan-400 rounded-lg p-3 cursor-pointer text-left transition hover:border-white";
+                modeProgCard.className = "pixel-card bg-slate-900/60 border-2 border-slate-700 rounded-lg p-3 cursor-pointer text-left transition hover:border-white";
+            }
+            updateUIHighScores();
+        }
+
+        function updateThemeDisplay() {
+            const theme = THEMES[currentThemeIdx];
+            themeNameEl.textContent = theme.name;
+            themeDescEl.textContent = theme.desc;
+        }
+
+        function toggleAudioState() {
+            soundFX.init();
+            const muted = soundFX.toggleMute();
+            quickMuteBtn.textContent = muted ? '🔇' : '🔊';
+            modalMuteBtn.textContent = muted ? 'SOUND: OFF 🔇' : 'SOUND: ON 🔊';
+            modalMuteBtn.className = muted 
+                ? 'pixel-btn px-4 py-2 bg-rose-600 text-white rounded text-xs font-bold border border-white'
+                : 'pixel-btn px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold border border-white';
+            soundFX.playClick();
+        }
+
+        function spawnTarget() {
+            const params = getDynamicParameters();
+            let config = STATIONARY_CONFIG;
+            if (selectedMode === 'PROGRESSION') {
+                config = PHASE_CONFIGS[currentPhase];
+            }
+
+            let type = 'standard';
+            const roll = Math.random();
+
+            if (config.allowTraps && roll < config.trapProb) {
+                type = 'trap';
+            } else if (roll < config.trapProb + config.goldProb) {
+                type = 'gold';
+            } else if (roll < config.trapProb + config.goldProb + config.armoredProb) {
+                type = 'armored';
+            } else if (roll < config.trapProb + config.goldProb + config.armoredProb + config.speedsterProb) {
+                type = 'speedster';
+            }
+
+            let radius = Math.floor(Math.random() * (params.maxRadius - params.minRadius + 1)) + params.minRadius;
+            if (type === 'speedster') radius = Math.floor(radius * 0.75);
+
+            const padding = radius + 30;
+            const x = Math.random() * (canvas.width - padding * 2) + padding;
+            const y = Math.random() * (canvas.height - padding * 2) + padding;
+
+            targets.push(new Target(x, y, radius, type, params.lifespan, params.driftSpeedScale));
+        }
+
+        function updatePhase() {
+            if (selectedMode !== 'PROGRESSION') return;
+
+            let newPhase = 1;
+            if (score >= 111) newPhase = 4;
+            else if (score >= 61) newPhase = 3;
+            else if (score >= 26) newPhase = 2;
+
+            if (newPhase !== currentPhase) {
+                currentPhase = newPhase;
+                const config = PHASE_CONFIGS[currentPhase];
+                
+                phaseBadge.textContent = `STAGE ${currentPhase}`;
+                phaseBadge.className = `text-[9px] md:text-xs px-2 py-0.5 rounded border-2 ${config.badgeBg} ${config.badgeBorder} ${config.badgeText}`;
+
+                phaseBannerContent.textContent = config.name;
+                phaseBanner.classList.remove('hidden');
+                phaseBanner.classList.remove('phase-banner-anim');
+                void phaseBanner.offsetWidth;
+                phaseBanner.classList.add('phase-banner-anim');
+
+                if (currentPhase === 4) {
+                    gameContainer.classList.add('overdrive-glow');
+                } else {
+                    gameContainer.classList.remove('overdrive-glow');
+                }
+
+                soundFX.playPhaseUp();
+            }
+        }
+
+        function handleTap(e) {
+            if (gameState !== 'PLAYING') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const tapX = (e.clientX || e.touches[0].clientX) - rect.left;
+            const tapY = (e.clientY || e.touches[0].clientY) - rect.top;
+
+            let hitTarget = false;
+
+            for (let i = targets.length - 1; i >= 0; i--) {
+                const target = targets[i];
+                if (target.isPointInside(tapX, tapY)) {
+                    hitTarget = true;
+                    
+                    if (target.isTrap) {
+                        createExplosion(target.x, target.y, '#f43f5e');
+                        triggerScreenShake();
+                        soundFX.playExplosion();
+                        endGame("Tapped a TRAP / SKULL target!");
+                        return;
+                    }
+
+                    if (target.type === 'armored' && target.hp > 1) {
+                        target.hp--;
+                        soundFX.playHit('armored_hit');
+                        createExplosion(target.x, target.y, '#94a3b8');
+                        floatingTexts.push(new FloatingText(target.x, target.y, 'CRACK!', '#cbd5e1'));
+                        break;
+                    }
+
+                    const elapsed = performance.now() - target.spawnTime;
+                    const isPerfect = elapsed < 220;
+                    const theme = THEMES[currentThemeIdx];
+
+                    let earnedPoints = 1;
+                    if (target.type === 'gold') earnedPoints = 3;
+                    else if (target.type === 'armored') earnedPoints = 2;
+                    else if (target.type === 'speedster') earnedPoints = 2;
+
+                    if (isPerfect) earnedPoints += 1;
+
+                    score += earnedPoints;
+                    comboCount++;
+                    if (comboCount > maxCombo) maxCombo = comboCount;
+
+                    scoreDisplay.textContent = score;
+
+                    let particleColor = theme.targetOuter;
+                    if (target.type === 'gold') particleColor = '#facc15';
+                    else if (target.type === 'armored') particleColor = '#94a3b8';
+                    else if (target.type === 'speedster') particleColor = '#10b981';
+
+                    createExplosion(target.x, target.y, particleColor);
+                    
+                    let floatingMsg = `+${earnedPoints}`;
+                    if (isPerfect) floatingMsg = `PERFECT! +${earnedPoints}`;
+                    else if (target.type === 'gold') floatingMsg = `GOLD! +${earnedPoints}`;
+
+                    floatingTexts.push(new FloatingText(
+                        target.x, target.y, floatingMsg, 
+                        target.type === 'gold' ? '#facc15' : (isPerfect ? '#facc15' : '#38bdf8')
+                    ));
+
+                    soundFX.playHit(target.type, isPerfect);
+                    targets.splice(i, 1);
+
+                    updatePhase();
+                    break;
+                }
+            }
+
+            if (!hitTarget) {
+                createExplosion(tapX, tapY, '#e11d48');
+                triggerScreenShake();
+                soundFX.playExplosion();
+                endGame("MISSED! Clicked empty space!");
+            }
+        }
+
+        canvas.addEventListener('mousedown', handleTap);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleTap(e);
+        }, { passive: false });
+
+        function startGame() {
+            soundFX.init();
+            
+            gameState = 'PLAYING';
+            score = 0;
+            currentPhase = 1;
+            comboCount = 0;
+            maxCombo = 0;
+            targets = [];
+            particles = [];
+            floatingTexts = [];
+
+            gameContainer.classList.remove('overdrive-glow');
+            scoreDisplay.textContent = '0';
+            hudModeLabel.textContent = selectedMode;
+
+            if (selectedMode === 'PROGRESSION') {
+                const config = PHASE_CONFIGS[1];
+                phaseBadge.textContent = 'STAGE 1';
+                phaseBadge.className = `text-[9px] md:text-xs px-2 py-0.5 rounded border-2 ${config.badgeBg} ${config.badgeBorder} ${config.badgeText}`;
+            } else {
+                phaseBadge.textContent = 'CLASSIC';
+                phaseBadge.className = `text-[9px] md:text-xs px-2 py-0.5 rounded border-2 ${STATIONARY_CONFIG.badgeBg} ${STATIONARY_CONFIG.badgeBorder} ${STATIONARY_CONFIG.badgeText}`;
+            }
+
+            homeScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            settingsModal.classList.add('hidden');
+
+            lastSpawnTime = performance.now();
+            spawnTarget();
+
+            if (animFrameId) cancelAnimationFrame(animFrameId);
+            animFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function endGame(reason) {
+            gameState = 'GAMEOVER';
+
+            if (score > highScores[selectedMode]) {
+                highScores[selectedMode] = score;
+                localStorage.setItem(`deadeye_high_${selectedMode.toLowerCase()}`, score);
+                updateUIHighScores();
+            }
+
+            deathReasonText.textContent = reason;
+            finalScoreText.textContent = score;
+            finalHighScoreText.textContent = highScores[selectedMode];
+            finalModeLabel.textContent = selectedMode;
+            finalComboText.textContent = `${maxCombo}x`;
+
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function showHomeMenu() {
+            gameState = 'HOME';
+            gameContainer.classList.remove('overdrive-glow');
+            homeScreen.classList.remove('hidden');
+            gameOverScreen.classList.add('hidden');
+            settingsModal.classList.add('hidden');
+            updateUIHighScores();
+        }
+
+        function drawDynamicBackground(currentTime) {
+            const theme = THEMES[currentThemeIdx];
+
+            if (selectedMode === 'PROGRESSION') {
+                if (currentPhase === 1) {
+                    ctx.fillStyle = theme.bgColor;
+                } else if (currentPhase === 2) {
+                    ctx.fillStyle = theme.id === 'cyber' ? '#0f0a21' : (theme.id === 'saloon' ? '#29180e' : '#070b19');
+                } else if (currentPhase === 3) {
+                    ctx.fillStyle = theme.id === 'cyber' ? '#1e0a2b' : (theme.id === 'saloon' ? '#381609' : '#110626');
+                } else if (currentPhase === 4) {
+                    const pulse = Math.abs(Math.sin(currentTime * 0.005));
+                    ctx.fillStyle = theme.id === 'cyber' 
+                        ? `rgba(35, 5, 45, ${0.85 + pulse * 0.15})` 
+                        : (theme.id === 'saloon' ? `rgba(50, 10, 10, ${0.85 + pulse * 0.15})` : `rgba(25, 2, 40, ${0.85 + pulse * 0.15})`);
+                }
+            } else {
+                ctx.fillStyle = theme.bgColor;
+            }
+
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = theme.gridColor;
+            ctx.lineWidth = selectedMode === 'PROGRESSION' && currentPhase >= 3 ? 1.5 : 1;
+            const gridSize = selectedMode === 'PROGRESSION' && currentPhase === 4 ? 30 : 40;
+
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            if (theme.id === 'space' || (selectedMode === 'PROGRESSION' && currentPhase >= 2)) {
+                ctx.fillStyle = currentPhase === 4 ? '#f43f5e' : (currentPhase === 3 ? '#e0e7ff' : '#ffffff');
+                stars.forEach(s => {
+                    ctx.globalAlpha = s.alpha;
+                    ctx.fillRect(s.x, s.y, s.size, s.size);
+                    if (selectedMode === 'PROGRESSION' && currentPhase >= 2) {
+                        s.y += s.speed * (currentPhase * 0.8);
+                        if (s.y > canvas.height) s.y = 0;
+                    }
+                });
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function gameLoop(currentTime) {
+            if (gameState !== 'PLAYING') return;
+
+            drawDynamicBackground(currentTime);
+
+            const params = getDynamicParameters();
+            let config = STATIONARY_CONFIG;
+            if (selectedMode === 'PROGRESSION') {
+                config = PHASE_CONFIGS[currentPhase];
+            }
+
+            if (currentTime - lastSpawnTime > params.spawnDelay) {
+                spawnTarget();
+
+                if (selectedMode === 'PROGRESSION' && config.multiSpawnProb && Math.random() < config.multiSpawnProb) {
+                    spawnTarget();
+                }
+
+                lastSpawnTime = currentTime;
+            }
+
+            for (let i = targets.length - 1; i >= 0; i--) {
+                const target = targets[i];
+                target.update(canvas.width, canvas.height);
+                target.draw(ctx, currentTime);
+
+                if (currentTime - target.spawnTime >= target.lifespan) {
+                    if (!target.isTrap) {
+                        createExplosion(target.x, target.y, '#e11d48');
+                        triggerScreenShake();
+                        soundFX.playExplosion();
+                        endGame("Target timed out!");
+                        return;
+                    } else {
+                        targets.splice(i, 1);
+                    }
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+                p.draw(ctx);
+                if (p.alpha <= 0) particles.splice(i, 1);
+            }
+
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const ft = floatingTexts[i];
+                ft.update();
+                ft.draw(ctx);
+                if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+            }
+
+            animFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // DOM Event Listeners
+        modeProgCard.addEventListener('click', () => setGameMode('PROGRESSION'));
+        modeStatCard.addEventListener('click', () => setGameMode('STATIONARY'));
+
+        quickMuteBtn.addEventListener('click', toggleAudioState);
+        modalMuteBtn.addEventListener('click', toggleAudioState);
+
+        openSettingsBtn.addEventListener('click', () => {
+            soundFX.playClick();
+            settingsModal.classList.remove('hidden');
+        });
+
+        const closeSettings = () => {
+            soundFX.playClick();
+            settingsModal.classList.add('hidden');
+        };
+
+        closeSettingsBtn.addEventListener('click', closeSettings);
+        closeSettingsBottomBtn.addEventListener('click', closeSettings);
+
+        prevThemeBtn.addEventListener('click', () => {
+            currentThemeIdx = (currentThemeIdx - 1 + THEMES.length) % THEMES.length;
+            updateThemeDisplay();
+            soundFX.playClick();
+        });
+
+        nextThemeBtn.addEventListener('click', () => {
+            currentThemeIdx = (currentThemeIdx + 1) % THEMES.length;
+            updateThemeDisplay();
+            soundFX.playClick();
+        });
+
+        startBtn.addEventListener('click', startGame);
+        retryBtn.addEventListener('click', startGame);
+        homeBtn.addEventListener('click', showHomeMenu);
+
+        window.onload = () => {
+            resizeCanvas();
+            updateUIHighScores();
+            updateThemeDisplay();
+        };
+
+    </script>
+</body>
+</html>
